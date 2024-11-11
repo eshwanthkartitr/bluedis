@@ -5,7 +5,7 @@ how to build a low-latency system. The reference article can be found
 [here](https://www.build-redis-from-scratch.dev/en/aof)
 
 ## High Level Architecture
-![SVG-Image]("diagram.svg")
+![SVG-Image](diagram.svg)
 
 ## Check-list
 - [X] Build the server
