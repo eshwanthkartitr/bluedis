@@ -25,6 +25,74 @@ type Value struct {
 	array []Value
 }
 
+func (v Value) Marshal() []byte {
+
+	// For writing data back, we need to Marshal the data into RESP. We are doing
+	// this based on the type and calling specific methods for each
+
+	switch v.typ {
+	case "array":
+		return v.marshalArray()
+	case "bulk":
+		return v.marshalBulk()
+	case "string":
+		return v.marshalString()
+	case "null":
+		return v.marshalNull()
+	case "error":
+		return v.marshalError()
+	default:
+		return []byte{}
+	}
+}
+
+func (v Value) marshalArray() []byte {
+	var bytes []byte
+	length := len(v.array)
+	bytes = append(bytes, ARRAY)
+	bytes = append(bytes, strconv.Itoa(length)...)
+	bytes = append(bytes, '\r', '\n')
+
+	for i := 0; i < length; i++ {
+		bytes = append(bytes, v.array[i].Marshal()...)
+	}
+
+	return bytes
+}
+
+func (v Value) marshalBulk() []byte {
+	var bytes []byte
+	bytes = append(bytes, BULK)
+	bytes = append(bytes, strconv.Itoa(len(v.bulk))...)
+	bytes = append(bytes, '\r', '\n') // CRLF for RESP
+	bytes = append(bytes, v.bulk...)
+	bytes = append(bytes, '\r', '\n') // CRLF for RESP
+
+	return bytes
+}
+
+func (v Value) marshalString() []byte {
+	var bytes []byte
+	bytes = append(bytes, STRING)     // Adding the string type
+	bytes = append(bytes, v.str...)   // Adding the string bytes
+	bytes = append(bytes, '\r', '\n') // Adding the CRLF for redis-cli to understand
+
+	return bytes
+}
+
+func (v Value) marshalNull() []byte {
+	return []byte("$-1\r\n") // This is the null representation according to RESP
+}
+
+func (v Value) marshalError() []byte {
+	var bytes []byte
+	bytes = append(bytes, ERROR)
+	bytes = append(bytes, v.str...)
+	bytes = append(bytes, '\r', '\n') // CRLF for RESP
+
+	return bytes
+}
+
 type Resp struct {
 	reader *bufio.Reader
 }
@@ -157,4 +225,28 @@ func (r *Resp) readBulk() (v Value, err error) {
 	r.readLine()
 
 	return v, nil
+}
+
+type Writer struct {
+	writer io.Writer
+}
+
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{
+		writer: w,
+	}
+}
+
+func (w *Writer) Write(v Value) error {
+
+	// Get all the required bytes after marshalling and write everything to the
+	// io.Writer provided in the function. Could be a file or a stdout
+	var bytes = v.Marshal()
+
+	_, err := w.writer.Write(bytes)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

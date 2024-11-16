@@ -38,10 +38,11 @@ func main() {
 			fmt.Println(err)
 			return
 		}
+
 		fmt.Println(value)
 
-		// Not responding to request but sending OK regardless of command received
-		// from client
-		conn.Write([]byte("+OK\r\n"))
+		writer := NewWriter(conn)
+		writer.Write(Value{typ: "string", str: "OK"})
+
 	}
 }
