@@ -25,14 +25,34 @@ go build
 ./bluedis
 ```
 
-3. Run the redis-cli and type out redis commands through another terminal.
+3. Run the redis-cli and type out redis commands through another terminal. The 
+following redis commands work
+- get
+- set
+- hget
+- hset
+- hgetall
+
+### Example Usage
+- Example 1 (For testing SET, GET)
+```bash
+set name ritesh # sets the name to ritesh
+get name        # returns ritesh
+```
+- Example 2 (For testing HGET, HSET, HGETALL)
+```bash
+
+```
+- Example 3 (For testing AOF)    
+Restart the `Bluedis` server after executing some `SET` commands. Then try to 
+`GET` them. It ought to get back your data thereby proving persistance.
 
 ## Check-list
 - [X] Build the server
 - [X] Reading RESP
-- [ ] Writing RESP
-- [ ] Redis Commands
-- [ ] Data Persistance
+- [x] Writing RESP
+- [x] Redis Commands
+- [x] Data Persistance with Append-Only File
 
 ## Notes
 
