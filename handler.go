@@ -140,7 +140,7 @@ func hgetall(args []Value) Value {
 
 	HSETsMu.RLock()
 	value, ok := HSETs[hash]
-	HSETsMu.RUnlock()
+	HSETsMu.Unlock()
 
 	if !ok {
 		return Value{typ: "null"}

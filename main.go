@@ -17,6 +17,26 @@ func main() {
 	}
 	fmt.Println("Listening on PORT: 6379")
 
+	aof, err := NewAof("database.aof")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer aof.Close()
+
+	// Persistance added and database automatically reconstructs from AOF
+	aof.Read(func(value Value) {
+		command := strings.ToUpper(value.array[0].bulk)
+		args := value.array[1:]
+
+		handler, ok := Handlers[command]
+		if !ok {
+			fmt.Println("Invalid command: ", command)
+			return
+		}
+		handler(args)
+	})
+
 	// Listening for new connections (this is a blocking connection) and whenever
 	// a connection is made then an acceptance is established using Accept()
 	conn, err := l.Accept()
@@ -61,6 +81,11 @@ func main() {
 			fmt.Println("Invalid command: ", command)
 			writer.Write(Value{typ: "string", str: ""})
 			continue
+		}
+
+		// Append "write" commands to AOF
+		if command == "SET" || command == "HSET" {
+			aof.Write(value)
 		}
 
 		result := handler(args)
