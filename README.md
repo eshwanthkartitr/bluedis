@@ -41,68 +41,18 @@ get name        # returns ritesh
 ```
 - Example 2 (For testing HGET, HSET, HGETALL)
 ```bash
-
+hset users u1 ritesh # sets u1 as ritesh
+hget users u1        # returns ritesh
+hset users u2 abhi   # set u2 as abhi
+hgetall users        # should return both users
 ```
 - Example 3 (For testing AOF)    
 Restart the `Bluedis` server after executing some `SET` commands. Then try to 
 `GET` them. It ought to get back your data thereby proving persistance.
 
-## Check-list
+## Roadmap
 - [X] Build the server
 - [X] Reading RESP
 - [x] Writing RESP
 - [x] Redis Commands
 - [x] Data Persistance with Append-Only File
-
-## Notes
-
-Redis receives commands through a serialization protocol called RESP 
-(Redis Serialization Protocol).
-
-For example
-```bash
-# Command
-SET admin ritesh
-
-# Serialization
-*3\r\n$3\r\nset\r\n$5\r\nadmin\r\n$5\r\nritesh
-
-# Better simplified version
-*3
-$3
-set
-$5
-admin
-$5
-ritesh
-```
-
-Another example
-```bash
-# Command
-GET admin
-
-# Serialization
-$5\r\nritesh\r\n
-
-# Better simplified version
-$5
-ritesh
-```
-
-For handling input operations, currently I am handling two types of commands
-1. ReadArray
-2. ReadBulk
-
-```bash
-# Serialization
-*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n
-
-# Better version
-*2
-$5
-hello
-$5
-world
-```
-
