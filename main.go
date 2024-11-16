@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 )
 
 func main() {
@@ -25,6 +26,9 @@ func main() {
 	}
 	defer conn.Close()
 
+	// Writer allocation for writing back to redis-cli
+	writer := NewWriter(conn)
+
 	// Create an infinite for-loop so that we can keep listening to the port
 	// constantly, receive commands from clients and respond to them
 	for {
@@ -39,10 +43,30 @@ func main() {
 			return
 		}
 
-		fmt.Println(value)
+		if value.typ != "array" {
+			fmt.Println("Invalid request, expected array")
+			continue
+		}
 
-		writer := NewWriter(conn)
-		writer.Write(Value{typ: "string", str: "OK"})
+		if len(value.array) == 0 {
+			fmt.Println("Invalid request, expected array length > 0")
+			continue
+		}
 
+		command := strings.ToUpper(value.array[0].bulk)
+		args := value.array[1:]
+
+		handler, ok := Handlers[command]
+		if !ok {
+			fmt.Println("Invalid command: ", command)
+			writer.Write(Value{typ: "string", str: ""})
+			continue
+		}
+
+		result := handler(args)
+		err = writer.Write(result)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
