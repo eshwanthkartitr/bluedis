@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+
 func main() {
 
 	// Creating a new server / listener
@@ -88,6 +89,17 @@ func main() {
 			if !ok {
 				fmt.Println("Invalid command: ", command)
 				writer.Write(Value{typ: "string", str: ""})
+				continue
+			}
+
+			if command  == "Expire" {
+				// Expire command
+				expire(args)
+				continue
+			}
+
+			if command == "Del"{
+				Delete(args)
 				continue
 			}
 
