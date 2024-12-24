@@ -1,11 +1,12 @@
+// handler.go
 package main
 
 import (
 	"fmt"
-	"sync"
-	"time"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Redis commands are case-sensitive
@@ -16,8 +17,8 @@ var Handlers = map[string]func([]Value) Value{
 	"HSET":    hset,
 	"HGET":    hget,
 	"HGETALL": hgetall,
-	"EXPIRE": expire,
-	"DEL": Delete,
+	"EXPIRE":  expireHandler,
+	"DEL":     Delete,
 }
 
 func Delete(args []Value) Value {
@@ -27,19 +28,21 @@ func Delete(args []Value) Value {
 			str: "ERR wrong number of arguments for 'del' command",
 		}
 	}
-	for i:=0;i<len(args);i++ {
-		key := args[i].bulk
-
+	deletedCount := 0
+	for _, arg := range args {
+		key := arg.bulk
 		SETsMu.Lock()
-		_, ok := SETs[key]
-		if ok {
+		if _, ok := SETs[key]; ok {
 			delete(SETs, key)
+			fmt.Println("DEL: key=", key)
+			deletedCount++
 		}
-		SETsMu.Unlock()
+		SETsMu.Unlock() // Also delete from expiry map
 	}
+	fmt.Println("DEL: deletedCount=", deletedCount)
 	return Value{
-		typ: "string",
-		str: "OK",
+		typ: "integer",
+		num: deletedCount,
 	}
 }
 
@@ -47,173 +50,169 @@ func ping(args []Value) Value {
 	if len(args) == 0 {
 		return Value{typ: "string", str: "PONG"}
 	}
-
 	return Value{typ: "string", str: args[0].bulk}
 }
 
 type Values struct {
-    Content   string
-    Begone    time.Time
-    HasExpiry bool
+	Content   string
+	Begone    time.Time
+	HasExpiry bool
 }
 
-var SETs = map[string]Values{}
+var SETs = make(map[string]Values)
 var SETsMu = sync.RWMutex{}
 
-
 func set(args []Value) Value {
-    if len(args) < 2 {
-        return Value{
-            typ: "error",
-            str: "ERR wrong number of arguments for 'set' command",
-        }
-    }
+	if len(args) < 2 {
+		return Value{
+			typ: "error",
+			str: "ERR wrong number of arguments for 'set' command",
+		}
+	}
 
-    key := args[0].bulk
-    value := Values{Content: args[1].bulk}
-    expiry := false
+	key := args[0].bulk
+	value := Values{Content: args[1].bulk}
+	expiry := false
 
-    if len(args) == 4 && (args[2].bulk == "PX" || args[2].bulk == "px") {
-        expiry = true
-        px, err := time.ParseDuration(args[3].bulk + "ms")
-        if err != nil {
-            return Value{
-                typ: "error",
-                str: "ERR invalid PX value",
-            }
-        }
-        value.Begone = time.Now().Add(px)
-    }
-	if len(args) == 4 && (args[2].bulk == "EX" || args[2].bulk == "ex") {
-        expiry = true
-        px, err := time.ParseDuration(args[3].bulk + "s")
-        if err != nil {
-            return Value{
-                typ: "error",
-                str: "ERR invalid PX value",
-            }
-        }
-        value.Begone = time.Now().Add(px)
-    }
+	for i := 2; i < len(args); i += 2 {
+		if i+1 < len(args) {
+			switch strings.ToUpper(args[i].bulk) {
+			case "PX":
+				expiry = true
+				ms, err := strconv.ParseInt(args[i+1].bulk, 10, 64)
+				if err != nil {
+					return Value{typ: "error", str: "ERR invalid PX value"}
+				}
+				value.Begone = time.Now().Add(time.Duration(ms) * time.Millisecond)
+			case "EX":
+				expiry = true
+				s, err := strconv.Atoi(args[i+1].bulk)
+				if err != nil {
+					return Value{typ: "error", str: "ERR invalid EX value"}
+				}
+				value.Begone = time.Now().Add(time.Duration(s) * time.Second)
+			}
+		}
+	}
 
-    value.HasExpiry = expiry
-
-    SETsMu.Lock()
-    SETs[key] = value
-    SETsMu.Unlock()
-
-    fmt.Printf("SET: key=%s, value=%s, expiry=%v, Begone=%v\n", key, value.Content, value.HasExpiry, value.Begone)
-
-    return Value{typ: "string", str: "OK"}
-}
-
-// 
-
-func expire(args []Value) Value {
-    if len(args) < 2 || len(args) > 3 {
-        return Value{
-            typ: "error",
-            str: "ERR wrong number of arguments for 'expire' command",
-        }
-    }
-	fmt.Println("Expire command Intiated")
-
-    key := args[0].bulk
-	fmt.Println(strconv.Atoi(args[1].bulk))
-    seconds, err := strconv.Atoi(args[1].bulk)
-    if err != nil {
-        return Value{
-            typ: "error",
-            str: "ERR value is not an integer or out of range",
-        }
-    }
-	fmt.Println("Seconds: ", seconds)
-
-    var flag string
-    if len(args) == 3 {
-        flag = strings.ToUpper(args[2].bulk)
-        if flag != "NX" && flag != "XX" && flag != "GT" && flag != "LT" {
-            return Value{
-                typ: "error",
-                str: "ERR invalid flag value",
-            }
-        }
-    }
-	fmt.Println("why go here",key)
+	value.HasExpiry = expiry
 
 	SETsMu.Lock()
-    value, ok := SETs[key]
-	fmt.Println(ok)
-    if !ok {
-        return Value{typ:  "bulk",bulk: "0"}  // Key is gone
-    }
-	fmt.Println("simple")
-	fmt.Println(flag)
+	SETs[key] = value
+	SETsMu.Unlock()
 
-    now := time.Now()
-    newExpiry := now.Add(time.Duration(seconds) * time.Second)
+	fmt.Printf("SET: key=%s, value=%s, expiry=%v, Begone=%v\n", key, value.Content, value.HasExpiry, value.Begone)
 
-    switch flag {
-    case "NX":
-		fmt.Println(flag)
-        if value.HasExpiry {
-            return Value{typ: "bulk", bulk: "0"} // Key is already going
-        }
-    case "XX":
-        if !value.HasExpiry {
-            return Value{typ: "bulk", bulk: "0"} // Key is not going anywhere
-        }
-    case "GT":
-        if value.HasExpiry && !newExpiry.After(value.Begone) {
-            return Value{typ: "bulk", bulk: "0"} // New Begone is not greater
-        }
-    case "LT":
-        if value.HasExpiry && !newExpiry.Before(value.Begone) {
-            return Value{typ: "bulk", bulk: "0"} // New Begone is not lesser
-        }
-    }
-	fmt.Println("simple")
+	return Value{typ: "string", str: "OK"}
+}
 
-    value.HasExpiry = true
-    value.Begone = newExpiry
-    SETs[key] = value
-	fmt.Println("value",value)
-	defer SETsMu.Unlock() 
+func expireHandler(args []Value) Value {
+	if len(args) < 2 || len(args) > 3 {
+		return Value{
+			typ: "error",
+			str: "ERR wrong number of arguments for 'expire' command",
+		}
+	}
 
-    return Value{typ: "bulk", bulk: "1"}
+	key := args[0].bulk
+	seconds, err := strconv.Atoi(args[1].bulk)
+	if err != nil {
+		return Value{
+			typ: "error",
+			str: "ERR value is not an integer or out of range",
+		}
+	}
+
+	var flag string
+	if len(args) == 3 {
+		flag = strings.ToUpper(args[2].bulk)
+		if flag != "NX" && flag != "XX" && flag != "GT" && flag != "LT" {
+			return Value{
+				typ: "error",
+				str: "ERR invalid flag value",
+			}
+		}
+	}
+
+	SETsMu.Lock()
+	defer SETsMu.Unlock()
+	value, ok := SETs[key]
+	if !ok {
+		return Value{typ: "integer", num: 0} // Key does not exist
+	}
+
+	now := time.Now()
+	newExpiry := now.Add(time.Duration(seconds) * time.Second)
+
+	applyExpiry := false
+	switch flag {
+	case "":
+		applyExpiry = true
+	case "NX":
+		if !value.HasExpiry {
+			applyExpiry = true
+		}
+	case "XX":
+		if value.HasExpiry {
+			applyExpiry = true
+		}
+	case "GT":
+		if !value.HasExpiry || newExpiry.After(value.Begone) {
+			applyExpiry = true
+		}
+	case "LT":
+		if !value.HasExpiry || newExpiry.Before(value.Begone) {
+			applyExpiry = true
+		}
+	}
+
+	fmt.Println("EXPIRE: key=", key, "expiryTime=", newExpiry, "SETs[key]=", SETs[key])
+
+	if applyExpiry {
+		value.HasExpiry = true
+		value.Begone = newExpiry
+		SETs[key] = value
+		return Value{typ: "integer", num: 1}
+	}
+
+	fmt.Println("EXPIRE: key=", key, "expiryTime=", newExpiry, "SETs[key]=", SETs[key])
+
+	return Value{typ: "integer", num: 0}
 }
 
 func get(args []Value) Value {
-    if len(args) != 1 {
-        return Value{
-            typ: "error",
-            str: "ERR wrong number of arguments for 'get' command",
-        }
-    }
+	if len(args) != 1 {
+		return Value{
+			typ: "error",
+			str: "ERR wrong number of arguments for 'get' command",
+		}
+	}
 
-    key := args[0].bulk
+	key := args[0].bulk
 
-    SETsMu.Lock()
-    value, ok := SETs[key]
-    fmt.Printf("GET: key=%s, value=%s, hasExpiry=%v, Begone=%v, now=%v\n", key, value.Content, value.HasExpiry, value.Begone, time.Now())
-    if ok && value.HasExpiry && time.Now().After(value.Begone) {
-        // Key needs to be-gone for good
-        delete(SETs, key)
-        ok = false
-    }
-    defer SETsMu.Unlock() 
+	SETsMu.RLock()
+	value, ok := SETs[key]
+	SETsMu.RUnlock()
 
-    if !ok {
-        return Value{typ: "null"}
-    }
+	if ok && value.HasExpiry && time.Now().After(value.Begone) {
+		// Key needs to be-gone for good
+		SETsMu.Lock()
+		delete(SETs, key)
+		SETsMu.Unlock()
+		return Value{typ: "null"}
+	}
 
-    return Value{
-        typ:  "bulk",
-        bulk: value.Content,
-    }
+	if !ok {
+		return Value{typ: "null"}
+	}
+
+	return Value{
+		typ:  "bulk",
+		bulk: value.Content,
+	}
 }
 
-var HSETs = map[string]map[string]string{}
+var HSETs = make(map[string]map[string]string)
 var HSETsMu = sync.RWMutex{}
 
 func hset(args []Value) Value {
@@ -229,17 +228,13 @@ func hset(args []Value) Value {
 	value := args[2].bulk
 
 	HSETsMu.Lock()
-	// If the hash does not already exist, then create a new entry
+	defer HSETsMu.Unlock()
 	if _, ok := HSETs[hash]; !ok {
-		HSETs[hash] = map[string]string{}
+		HSETs[hash] = make(map[string]string)
 	}
 	HSETs[hash][key] = value
-	HSETsMu.Unlock()
 
-	return Value{
-		typ: "string",
-		str: "OK",
-	}
+	return Value{typ: "string", str: "OK"}
 }
 
 func hget(args []Value) Value {
@@ -285,13 +280,14 @@ func hgetall(args []Value) Value {
 		return Value{typ: "null"}
 	}
 
-	values := []Value{}
+	resp := []Value{}
 	for k, v := range value {
-		values = append(values, Value{typ: "bulk", bulk: fmt.Sprintf("%s:%s", k, v)})
+		resp = append(resp, Value{typ: "bulk", bulk: k})
+		resp = append(resp, Value{typ: "bulk", bulk: v})
 	}
 
 	return Value{
 		typ:   "array",
-		array: values,
+		array: resp,
 	}
 }

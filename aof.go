@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"strconv"
 )
 
 type Aof struct {
@@ -92,4 +93,48 @@ func (aof *Aof) Read(callback func(value Value)) error {
 	}
 
 	return nil
+}
+
+// My own functions
+
+func (aof *Aof) WriteExpire(key string, ttl int, condition string) error {
+	args := []Value{
+		{typ: "bulk", bulk: "EXPIRE"},
+		{typ: "bulk", bulk: key},
+		{typ: "bulk", bulk: strconv.Itoa(ttl)},
+	}
+	if condition != "" {
+		args = append(args, Value{typ: "bulk", bulk: condition})
+	}
+	value := Value{typ: "array", array: args}
+	return aof.Write(value)
+}
+
+// WriteDel converts the DEL command and its arguments into RESP format
+func (aof *Aof) WriteDel(keys []string) error {
+	args := []Value{{typ: "bulk", bulk: "DEL"}}
+	for _, key := range keys {
+		args = append(args, Value{typ: "bulk", bulk: key})
+	}
+	value := Value{typ: "array", array: args}
+	return aof.Write(value)
+}
+
+// WriteSet converts the SET command and its arguments into RESP format
+// WriteSet converts the SET command and its arguments into RESP format,
+// optionally including expiry information.
+func (aof *Aof) WriteSet(key, value string, args ...string) error {
+	commandArgs := []Value{{typ: "bulk", bulk: "SET"}, {typ: "bulk", bulk: key}, {typ: "bulk", bulk: value}}
+
+	// Check for expiry arguments (EX or PX)
+	for i := 0; i < len(args); i++ {	
+		commandArgs = append(commandArgs, Value{typ: "bulk", bulk: args[i]})
+		if i+1 < len(args) {
+			commandArgs = append(commandArgs, Value{typ: "bulk", bulk: args[i+1]})
+			break // Consume both EX/PX and the time
+		}
+	}
+
+	respValue := Value{typ: "array", array: commandArgs}
+	return aof.Write(respValue)
 }
