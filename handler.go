@@ -28,7 +28,7 @@ func ping(args []Value) Value {
 	if len(args) == 0 {
 		return Value{typ: "string", str: "PONG"}
 	}
-
+    fmt.Println("Ping received")
 	return Value{typ: "string", str: args[0].bulk}
 }
 
@@ -63,7 +63,7 @@ func get(args []Value) Value {
 	if len(args) != 1 {
 		return Value{
 			typ: "error",
-			str: "ERR wrong number of arguments for 'set' command",
+			str: "ERR wrong number of arguments for 'get' command",
 		}
 	}
 
