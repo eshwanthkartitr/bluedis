@@ -177,23 +177,31 @@ func lpush(args []Value) Value {
     key := args[0].bulk
     elements := args[1:]
 
+    // Lock listStore to ensure thread safety when accessing/creating the list
     listStoreMu.Lock()
     list, exists := listStore[key]
     if !exists {
-        list = NewDoublyLinkedList()
+        list = NewDoublyLinkedList() // Create a new list if it doesn't exist
         listStore[key] = list
     }
+    listStoreMu.Unlock() // Release the listStore lock after modifying the listStore
+
+    // Lock the specific list to ensure thread safety when modifying the list
+    list.mu.Lock()
+    defer list.mu.Unlock() // Ensure unlocking the list after the operation
+
+    // Push elements to the front (left) of the list
     for _, element := range elements {
         list.PushLeft(element.bulk)
     }
-    length := list.Length()
-    listStoreMu.Unlock()
 
+    // Return the length of the list after the operation
     return Value{
-		typ: "integer",
-		num: length,
-	}
+        typ: "integer",
+        num: list.Length(),
+    }
 }
+
 
 func lpop(args []Value) Value {
     if len(args) < 1 || len(args) > 2 {
