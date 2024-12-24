@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"sync"
-	"time"
 )
 
 
@@ -28,7 +26,7 @@ func NewDoublyLinkedList() *DoublyLinkedList {
 	return dll
 }
 
-func (dll *DoublyLinkedList) PushLeft(value interface{}) {
+func (dll *DoublyLinkedList) PushLeft(value interface{})int {
 	dll.mu.Lock()
 	defer dll.mu.Unlock()
 
@@ -43,9 +41,10 @@ func (dll *DoublyLinkedList) PushLeft(value interface{}) {
 	}
 	dll.length++
 	dll.cond.Signal() // Notify any waiting consumers
+	return dll.length
 }
 
-func (dll *DoublyLinkedList) PushRight(value interface{}) {
+func (dll *DoublyLinkedList) PushRight(value interface{})int {
 	dll.mu.Lock()
 	defer dll.mu.Unlock()
 
@@ -60,6 +59,7 @@ func (dll *DoublyLinkedList) PushRight(value interface{}) {
 	}
 	dll.length++
 	dll.cond.Signal() // Notify any waiting consumers
+	return dll.length
 }
 
 func (dll *DoublyLinkedList) PopLeft() (interface{}, bool) {
