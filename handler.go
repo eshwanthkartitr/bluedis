@@ -198,6 +198,7 @@ func lpush(args []Value) Value {
 }
 
 func lpop(args []Value) Value {
+    fmt.Println("Received LPOP command with arguments:", args)
     if len(args) < 1 || len(args) > 2 {
         return Value{typ: "error", str: "ERR wrong number of arguments for 'lpop' command"}
     }
@@ -227,6 +228,8 @@ func lpop(args []Value) Value {
         result = append(result, Value{typ: "bulk", bulk: fmt.Sprintf("%v", value)})
     }
     list.mu.Unlock()
+
+    fmt.Println("List length after LPUSH:", list.Length())
 
     // If only one element is popped, return it as a bulk string wrapped in a Value
     if len(result) == 1 {

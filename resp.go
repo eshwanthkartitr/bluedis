@@ -41,6 +41,8 @@ func (v Value) Marshal() []byte {
 		return v.marshalNull()
 	case "error":
 		return v.marshalError()
+	case "integer":
+		return v.marshalInteger()
 	default:
 		return []byte{}
 	}
@@ -91,6 +93,10 @@ func (v Value) marshalError() []byte {
 	bytes = append(bytes, '\r', '\n') // CRLF for RESP
 
 	return bytes
+}
+
+func (v Value) marshalInteger() []byte { 
+	return []byte(fmt.Sprintf(":%d\r\n", v.num))
 }
 
 type Resp struct {
