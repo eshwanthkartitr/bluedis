@@ -399,8 +399,11 @@ func blpop(args []Value) Value {
                     value, _ := list.PopLeft()
                     listStoreMu.Unlock()
                     popChan <- Value{
-                        typ:  "bulk",
-                        bulk: fmt.Sprintf("%v", value),
+                        typ: "array",
+                        array: []Value{
+                            {typ: "bulk", bulk: key.bulk},
+                            {typ: "bulk", bulk: fmt.Sprintf("%v", value)},
+                        },             
                     }
                     return
                 }
