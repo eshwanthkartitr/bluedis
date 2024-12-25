@@ -223,8 +223,8 @@ func lpop(args []Value) Value {
     }
     listStoreMu.Unlock()
 
-    list.mu.Lock()
-    defer list.mu.Unlock() // Ensure the mutex is always unlocked
+    // list.mu.Lock()
+    // defer list.mu.Unlock() // Ensure the mutex is always unlocked
 
     result := make([]Value, 0, count)
     for i := 0; i < count && list.Length() > 0; i++ {
