@@ -386,13 +386,15 @@ func blpop(args []Value) Value {
     // Create a timer for the timeout
     timer := time.NewTimer(time.Duration(timeout) * time.Second)
     defer timer.Stop()
-
     // Create a channel to signal when a value is popped
     popChan := make(chan Value, 1)
 
     go func() {
+        listStoreMu.Lock() 
+        defer listStoreMu.Unlock()
+        defer close(popChan) // Ensure channel is closed properly 
+        
         for {
-            listStoreMu.Lock()
             for _, key := range keys {
                 list, exists := listStore[key.bulk]
                 if exists && list.Length() > 0 {
@@ -409,8 +411,7 @@ func blpop(args []Value) Value {
                     return
                 }
             }
-            listStoreMu.Unlock()
-
+            // If none of the lists have values, wait for a short period before retrying            
             select {
             case <-timer.C:
                 popChan <- Value{typ: "null"}
