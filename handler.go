@@ -383,16 +383,18 @@ func blpop(args []Value) Value {
         return Value{typ: "error", str: "ERR invalid timeout argument for 'blpop' command"}
     }
 
+    
+    // Create a channel to signal when a value is popped
+    popChan := make(chan Value, 1)
+    stopChan := make(chan struct{})
     // Create a timer for the timeout
     timer := time.NewTimer(time.Duration(timeout) * time.Second)
     defer timer.Stop()
-    // Create a channel to signal when a value is popped
-    popChan := make(chan Value, 1)
 
     go func() {
+        defer close(popChan) // Ensure channel is closed properly 
         listStoreMu.Lock() 
         defer listStoreMu.Unlock()
-        defer close(popChan) // Ensure channel is closed properly 
         
         for {
             for _, key := range keys {
@@ -412,9 +414,8 @@ func blpop(args []Value) Value {
             }
             // If none of the lists have values, wait for a short period before retrying            
             select {
-            case <-timer.C:
-                popChan <- Value{typ: "null"}
-                return
+            case <-stopChan:
+                return 
             default:
                 time.Sleep(50 * time.Millisecond)
             }
@@ -425,9 +426,11 @@ func blpop(args []Value) Value {
     select {
     case result := <-popChan:
         fmt.Println("Returning result:", result)
+        close(stopChan) // Ensure goroutine stops if result is returned  
         return result
     case <-timer.C:
         fmt.Println("Timeout reached, returning null")
+        close(stopChan) // Ensure goroutine stops if timout occurs
         return Value{typ: "null"}
     }
 }
