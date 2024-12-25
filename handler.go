@@ -371,67 +371,63 @@ func lrange(args []Value) Value {
 }
 
 func blpop(args []Value) Value {
-    fmt.Println("Received BLPOP command with arguments:", args)
-
     if len(args) < 2 {
         return Value{typ: "error", str: "ERR wrong number of arguments for 'blpop' command"}
     }
 
+    // Extract keys and timeout
     keys := args[:len(args)-1]
     timeout, err := strconv.Atoi(args[len(args)-1].bulk)
     if err != nil || timeout < 0 {
         return Value{typ: "error", str: "ERR invalid timeout argument for 'blpop' command"}
     }
 
-    
-    // Create a channel to signal when a value is popped
-    popChan := make(chan Value, 1)
-    stopChan := make(chan struct{})
-    // Create a timer for the timeout
-    timer := time.NewTimer(time.Duration(timeout) * time.Second)
-    defer timer.Stop()
+    // Create a ticker for polling and a timer for timeout
+    ticker := time.NewTicker(50 * time.Millisecond)
+    defer ticker.Stop()
 
-    go func() {
-        defer close(popChan) // Ensure channel is closed properly 
-        
-        for {
-            listStoreMu.Lock() 
-            for _, key := range keys {
-                list, exists := listStore[key.bulk]
-                if exists && list.Length() > 0 {
-                    value, _ := list.PopLeft()
-                    fmt.Println("Popped value from key:", key.bulk, "value:", value)
-                    popChan <- Value{
-                        typ: "array",
-                        array: []Value{
-                            {typ: "bulk", bulk: key.bulk},
-                            {typ: "bulk", bulk: fmt.Sprintf("%v", value)},
-                        },
-                    }
-                    return
+    var timer *time.Timer
+    var timerC <-chan time.Time
+    
+    if timeout > 0 {
+        timer = time.NewTimer(time.Duration(timeout) * time.Second)
+        defer timer.Stop()
+        timerC = timer.C
+    }
+
+    // Main loop
+    for {
+        // Check all keys under lock
+        listStoreMu.Lock()
+        for _, key := range keys {
+            list, exists := listStore[key.bulk]
+            if exists && list.Length() > 0 {
+                value, _ := list.PopLeft()
+                listStoreMu.Unlock()
+                
+                return Value{
+                    typ: "array",
+                    array: []Value{
+                        {typ: "bulk", bulk: key.bulk},
+                        {typ: "bulk", bulk: fmt.Sprintf("%v", value)},
+                    },
                 }
             }
-            defer listStoreMu.Unlock()
-            // If none of the lists have values, wait for a short period before retrying            
-            select {
-            case <-stopChan:
-                return 
-            default:
-                time.Sleep(50 * time.Millisecond)
-            }
         }
-    }()
+        listStoreMu.Unlock()
 
-    fmt.Println("Blocking until value is popped or timeout...")
-    select {
-    case result := <-popChan:
-        fmt.Println("Returning result:", result)
-        close(stopChan) // Ensure goroutine stops if result is returned  
-        return result
-    case <-timer.C:
-        fmt.Println("Timeout reached, returning null")
-        close(stopChan) // Ensure goroutine stops if timout occurs
-        return Value{typ: "null"}
+        // Wait for either timeout or next tick
+        select {
+        case <-timerC:
+            return Value{typ: "null"}
+        case <-ticker.C:
+            // Continue to next iteration
+        }
+
+        // If timeout is 0, return immediately
+        if timeout == 0 {
+            return Value{typ: "null"}
+        }
     }
 }
 
