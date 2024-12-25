@@ -28,6 +28,7 @@ func main() {
 	aof.Read(func(value Value) {
 		command := strings.ToUpper(value.array[0].bulk)
 		args := value.array[1:]
+		fmt.Println("Arguments passed :",args)
 
 		handler, ok := Handlers[command]
 		if !ok {
