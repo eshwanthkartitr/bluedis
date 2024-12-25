@@ -28,7 +28,6 @@ func ping(args []Value) Value {
 	if len(args) == 0 {
 		return Value{typ: "string", str: "PONG"}
 	}
-	fmt.Println("Ping received")
 	return Value{typ: "string", str: args[0].bulk}
 }
 
@@ -171,7 +170,7 @@ var listStore = make(map[string]*DoublyLinkedList)
 var listStoreMu sync.Mutex
 
 func lpush(args []Value) Value {
-	fmt.Println("Received LPUSH command with arguments:", args)
+	// fmt.Println("Received LPUSH command with arguments:", args)
 
 	if len(args) != 2 {
 		return Value{typ: "error", str: "ERR wrong number of arguments for 'lpush' command"}
@@ -190,13 +189,13 @@ func lpush(args []Value) Value {
 
 	length := list.PushLeft(value)
 
-	fmt.Println("List length after LPUSH:", length)
+	// fmt.Println("List length after LPUSH:", length)
 
 	return Value{typ: "integer", num: length}
 }
 
 func lpop(args []Value) Value {
-	fmt.Println("Received LPOP command with arguments:", args)
+	// fmt.Println("Received LPOP command with arguments:", args)
 
 	if len(args) < 1 || len(args) > 2 {
 		return Value{typ: "error", str: "ERR wrong number of arguments for 'lpop' command"}
@@ -231,8 +230,8 @@ func lpop(args []Value) Value {
 		result = append(result, Value{typ: "bulk", bulk: fmt.Sprintf("%v", value)})
 	}
 
-	fmt.Println("List length after LPOP:", list.Length())
-	fmt.Println("Result to return:", result)
+	// fmt.Println("List length after LPOP:", list.Length())
+	// fmt.Println("Result to return:", result)
 
 	// If only one element is popped, return it as a bulk string wrapped in a Value.
 	if len(result) == 1 {
