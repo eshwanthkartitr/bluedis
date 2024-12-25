@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"sync"
-	"strconv" // Add this import statement
+	"strconv" 
+    "time" //Used in blockingpop for creating timeout.
 )
 
 // Redis commands are case-sensitive
@@ -20,7 +21,7 @@ var Handlers = map[string]func([]Value) Value{
     "RPOP":    rpop,
     "LLEN":    llen,
     "LRANGE":  lrange,
-    //"BLPOP":   blpop,
+    "BLPOP":   blpop,
 }
 
 
@@ -369,34 +370,60 @@ func lrange(args []Value) Value {
 	}
 }
 
-// func blpop(args []Value) Value {
-//     if len(args) < 2 {
-//         return Value{typ: "error", str: "ERR wrong number of arguments for 'blpop' command"}
-//     }
+func blpop(args []Value) Value {
+    if len(args) < 2 {
+        return Value{typ: "error", str: "ERR wrong number of arguments for 'blpop' command"}
+    }
 
-//     keys := args[:len(args)-1]
-//     timeout, err := strconv.Atoi(args[len(args)-1].bulk)
-//     if err != nil || timeout < 0 {
-//         return Value{typ: "error", str: "ERR invalid timeout argument for 'blpop' command"}
-//     }
+    keys := args[:len(args)-1]
+    timeout, err := strconv.Atoi(args[len(args)-1].bulk)
+    if err != nil || timeout < 0 {
+        return Value{typ: "error", str: "ERR invalid timeout argument for 'blpop' command"}
+    }
 
-//     // Add blocking logic for BLPOP here (simplified version provided for now)
-//     // Iterates over provided keys to find the first non-empty list.
-//     listStoreMu.Lock()
-//     for _, key := range keys {
-//         list, exists := listStore[key.bulk]
-//         if exists && list.Length() > 0 {
-//             value, _ := list.PopLeft()
-//             listStoreMu.Unlock()
-//             return Value{
-// 				typ: "bulk",
-// 				bulk: fmt.Sprintf("%v", value),
-// 			}
-//         }
-//     }
-//     listStoreMu.Unlock()
+    // Add blocking logic for BLPOP here (simplified version provided for now).
+    // Iterates over provided keys to find the first non-empty list.
+    // Create a timer for the timeout.
+    timer := time.NewTimer(time.Duration(timeout) * time.Second)
+    defer timer.Stop()
 
-//     // Simulate blocking logic for `timeout` duration
-//     // Placeholder for actual timeout-based wait mechanism.
-//     return Value{typ: "null"}
-// }
+    // Create a channel to signal when a value is popped.
+    popChan := make(chan Value, 1)
+
+    go func() {
+        for {
+            listStoreMu.Lock()
+            for _, key := range keys {
+                list, exists := listStore[key.bulk]
+                if exists && list.Length() > 0 {
+                    value, _ := list.PopLeft()
+                    listStoreMu.Unlock()
+                    popChan <- Value{
+                        typ:  "bulk",
+                        bulk: fmt.Sprintf("%v", value),
+                    }
+                    return
+                }
+            }
+            listStoreMu.Unlock()
+
+            select {
+            case <-timer.C:
+                popChan <- Value{typ: "null"}
+                return
+            default:
+                // Sleep for a short period before retrying.
+                time.Sleep(50 * time.Millisecond)
+            }
+        }
+    }()
+
+    // Simulate blocking logic for `timeout` duration.
+    // Placeholder for actual timeout-based wait mechanism.
+    select {
+    case result := <-popChan:
+        return result
+    case <-timer.C:
+        return Value{typ: "null"}
+    }
+}

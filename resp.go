@@ -95,9 +95,12 @@ func (v Value) marshalError() []byte {
 	return bytes
 }
 
-func (v Value) marshalInteger() []byte { 
-	return []byte(fmt.Sprintf(":%d\r\n", v.num))
+// marshalInteger converts an integer value to a RESP-formatted integer reply.
+// The format is ":<integer>\r\n" as specified by the Redis Serialization Protocol.
+func (v Value) marshalInteger() []byte {
+    return []byte(fmt.Sprintf(":%d\r\n", v.num))
 }
+
 
 type Resp struct {
 	reader *bufio.Reader
