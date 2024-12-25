@@ -399,7 +399,6 @@ func blpop(args []Value) Value {
                 list, exists := listStore[key.bulk]
                 if exists && list.Length() > 0 {
                     value, _ := list.PopLeft()
-                    listStoreMu.Unlock()
                     fmt.Println("Popped value from key:", key.bulk, "value:", value)
                     popChan <- Value{
                         typ: "array",
