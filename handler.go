@@ -393,10 +393,9 @@ func blpop(args []Value) Value {
 
     go func() {
         defer close(popChan) // Ensure channel is closed properly 
-        listStoreMu.Lock() 
-        defer listStoreMu.Unlock()
         
         for {
+            listStoreMu.Lock() 
             for _, key := range keys {
                 list, exists := listStore[key.bulk]
                 if exists && list.Length() > 0 {
@@ -412,6 +411,7 @@ func blpop(args []Value) Value {
                     return
                 }
             }
+            defer listStoreMu.Unlock()
             // If none of the lists have values, wait for a short period before retrying            
             select {
             case <-stopChan:
