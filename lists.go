@@ -27,8 +27,8 @@ func NewDoublyLinkedList() *DoublyLinkedList {
 }
 
 func (dll *DoublyLinkedList) PushLeft(value interface{})int {
-	dll.mu.Lock()
-	defer dll.mu.Unlock()
+	// dll.mu.Lock()
+	// defer dll.mu.Unlock()
 
 	newNode := &Node{value: value}
 	if dll.head == nil {
@@ -45,8 +45,8 @@ func (dll *DoublyLinkedList) PushLeft(value interface{})int {
 }
 
 func (dll *DoublyLinkedList) PushRight(value interface{})int {
-	dll.mu.Lock()
-	defer dll.mu.Unlock()
+	// dll.mu.Lock()
+	// defer dll.mu.Unlock()
 
 	newNode := &Node{value: value}
 	if dll.tail == nil {
@@ -63,8 +63,8 @@ func (dll *DoublyLinkedList) PushRight(value interface{})int {
 }
 
 func (dll *DoublyLinkedList) PopLeft() (interface{}, bool) {
-	dll.mu.Lock()
-	defer dll.mu.Unlock()
+	// dll.mu.Lock()
+	// defer dll.mu.Unlock()
 
 	if dll.head == nil {
 		return nil, false 
