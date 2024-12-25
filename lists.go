@@ -1,18 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"sync"
-	"time"
 )
-
 
 type Node struct {
 	value interface{}
 	prev  *Node
 	next  *Node
 }
-
 
 type DoublyLinkedList struct {
 	head   *Node
@@ -28,7 +24,7 @@ func NewDoublyLinkedList() *DoublyLinkedList {
 	return dll
 }
 
-func (dll *DoublyLinkedList) PushLeft(value interface{}) {
+func (dll *DoublyLinkedList) PushLeft(value interface{}) int {
 	dll.mu.Lock()
 	defer dll.mu.Unlock()
 
@@ -42,10 +38,11 @@ func (dll *DoublyLinkedList) PushLeft(value interface{}) {
 		dll.head = newNode
 	}
 	dll.length++
-	dll.cond.Signal() // Notify any waiting consumers
+	dll.cond.Signal() // Notify any waiting consumers.
+	return dll.length
 }
 
-func (dll *DoublyLinkedList) PushRight(value interface{}) {
+func (dll *DoublyLinkedList) PushRight(value interface{}) int {
 	dll.mu.Lock()
 	defer dll.mu.Unlock()
 
@@ -59,7 +56,8 @@ func (dll *DoublyLinkedList) PushRight(value interface{}) {
 		dll.tail = newNode
 	}
 	dll.length++
-	dll.cond.Signal() // Notify any waiting consumers
+	dll.cond.Signal() // Notify any waiting consumers.
+	return dll.length
 }
 
 func (dll *DoublyLinkedList) PopLeft() (interface{}, bool) {
@@ -67,7 +65,7 @@ func (dll *DoublyLinkedList) PopLeft() (interface{}, bool) {
 	defer dll.mu.Unlock()
 
 	if dll.head == nil {
-		return nil, false 
+		return nil, false
 	}
 
 	value := dll.head.value
@@ -86,7 +84,7 @@ func (dll *DoublyLinkedList) PopRight() (interface{}, bool) {
 	defer dll.mu.Unlock()
 
 	if dll.tail == nil {
-		return nil, false 
+		return nil, false
 	}
 
 	value := dll.tail.value
@@ -94,7 +92,7 @@ func (dll *DoublyLinkedList) PopRight() (interface{}, bool) {
 	if dll.tail != nil {
 		dll.tail.next = nil
 	} else {
-		dll.head = nil 
+		dll.head = nil
 	}
 	dll.length--
 	return value, true
@@ -106,13 +104,13 @@ func (dll *DoublyLinkedList) Length() int {
 	return dll.length
 }
 
-// BlockingPopLeft removes and returns the value from the head of the list, blocking if empty
+// BlockingPopLeft removes and returns the value from the head of the list, blocking if empty.
 func (dll *DoublyLinkedList) BlockingPopLeft() interface{} {
 	dll.mu.Lock()
 	defer dll.mu.Unlock()
 
 	for dll.head == nil {
-		dll.cond.Wait() // Wait until an item is available
+		dll.cond.Wait() // Wait until an item is available.
 	}
 
 	value := dll.head.value
@@ -120,42 +118,41 @@ func (dll *DoublyLinkedList) BlockingPopLeft() interface{} {
 	if dll.head != nil {
 		dll.head.prev = nil
 	} else {
-		dll.tail = nil 
+		dll.tail = nil
 	}
 	dll.length--
 	return value
 }
 
-
-// ExtractRange returns a slice of values from the list within the specified range
+// ExtractRange returns a slice of values from the list within the specified range.
 func (dll *DoublyLinkedList) ExtractRange(start, end int) []interface{} {
-    dll.mu.Lock()
-    defer dll.mu.Unlock()
+	dll.mu.Lock()
+	defer dll.mu.Unlock()
 
-    // Check if start is out of bounds
-    if start < 0 || start >= dll.length {
-        return nil
-    }
+	// Check if start is out of bounds.
+	if start < 0 || start >= dll.length {
+		return nil
+	}
 
-    // If end is -1, set it to the last index ,also adjusts the end if larger than the length of list
-    if end == -1 || end >= dll.length {
-        end = dll.length - 1
-    }
+	// If end is -1, set it to the last index ,also adjusts the end if larger than the length of list.
+	if end == -1 || end >= dll.length {
+		end = dll.length - 1
+	}
 
-    // Check if end is less than start after adjustments
-    if end < start {
-        return nil 
-    }
+	// Check if end is less than start after adjustments.
+	if end < start {
+		return nil
+	}
 
-    var result []interface{}
-    current := dll.head
-    for i := 0; i < start; i++ {
-        current = current.next
-    }
+	var result []interface{}
+	current := dll.head
+	for i := 0; i < start; i++ {
+		current = current.next
+	}
 
-    for i := start; i <= end && current != nil; i++ {
-        result = append(result, current.value)
-        current = current.next
-    }
-    return result
+	for i := start; i <= end && current != nil; i++ {
+		result = append(result, current.value)
+		current = current.next
+	}
+	return result
 }
