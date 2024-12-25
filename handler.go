@@ -16,9 +16,9 @@ var Handlers = map[string]func([]Value) Value{
 	"HGETALL": hgetall,
     "LPUSH":   lpush,
     "LPOP":    lpop,
-    //"RPUSH":   rpush,
-    //"RPOP":    rpop,
-    //"LLEN":    llen,
+    "RPUSH":   rpush,
+    "RPOP":    rpop,
+    "LLEN":    llen,
     //"LRANGE":  lrange,
     //"BLPOP":   blpop,
 }
@@ -249,90 +249,90 @@ func lpop(args []Value) Value {
 
 
 
-// func rpush(args []Value) Value {
-//     if len(args) < 2 {
-//         return Value{typ: "error", str: "ERR wrong number of arguments for 'rpush' command"}
-//     }
+func rpush(args []Value) Value {
+    if len(args) < 2 {
+        return Value{typ: "error", str: "ERR wrong number of arguments for 'rpush' command"}
+    }
 
-//     key := args[0].bulk
-//     elements := args[1:]
+    key := args[0].bulk
+    elements := args[1:]
 
-//     listStoreMu.Lock()
-//     list, exists := listStore[key]
-//     if !exists {
-//         list = NewDoublyLinkedList()
-//         listStore[key] = list
-//     }
-//     for _, element := range elements {
-//         list.PushRight(element.bulk)
-//     }
-//     length := list.Length()
-//     listStoreMu.Unlock()
+    listStoreMu.Lock()
+    list, exists := listStore[key]
+    if !exists {
+        list = NewDoublyLinkedList()
+        listStore[key] = list
+    }
+    for _, element := range elements {
+        list.PushRight(element.bulk)
+    }
+    length := list.Length()
+    listStoreMu.Unlock()
 
-//     return Value{
-// 		typ: "integer",
-// 		num: length,
-// 	}
-// }
+    return Value{
+		typ: "integer",
+		num: length,
+	}
+}
 
-// func rpop(args []Value) Value {
-//     if len(args) < 1 || len(args) > 2 {
-//         return Value{typ: "error", str: "ERR wrong number of arguments for 'rpop' command"}
-//     }
+func rpop(args []Value) Value {
+    if len(args) < 1 || len(args) > 2 {
+        return Value{typ: "error", str: "ERR wrong number of arguments for 'rpop' command"}
+    }
 
-//     key := args[0].bulk
-//     count := 1
-//     if len(args) == 2 {
-//         var err error
-//         count, err = strconv.Atoi(args[1].bulk)
-//         if err != nil || count <= 0 {
-//             return Value{typ: "error", str: "ERR invalid count argument for 'rpop' command"}
-//         }
-//     }
+    key := args[0].bulk
+    count := 1
+    if len(args) == 2 {
+        var err error
+        count, err = strconv.Atoi(args[1].bulk)
+        if err != nil || count <= 0 {
+            return Value{typ: "error", str: "ERR invalid count argument for 'rpop' command"}
+        }
+    }
 
-//     listStoreMu.Lock()
-//     list, exists := listStore[key]
-//     if !exists || list.Length() == 0 {
-//         listStoreMu.Unlock()
-//         return Value{typ: "null"}
-//     }
+    listStoreMu.Lock()
+    list, exists := listStore[key]
+    if !exists || list.Length() == 0 {
+        listStoreMu.Unlock()
+        return Value{typ: "null"}
+    }
 
-//     result := make([]Value, 0, count)
-//     for i := 0; i < count && list.Length() > 0; i++ {
-//         value, _ := list.PopRight()
-//         result = append(result, Value{typ: "bulk", bulk: fmt.Sprintf("%v", value)})
-//     }
-//     listStoreMu.Unlock()
+    result := make([]Value, 0, count)
+    for i := 0; i < count && list.Length() > 0; i++ {
+        value, _ := list.PopRight()
+        result = append(result, Value{typ: "bulk", bulk: fmt.Sprintf("%v", value)})
+    }
+    listStoreMu.Unlock()
 
-//     if len(result) == 1 {
-//         return result[0]
-//     }
-//     return Value{
-// 		typ: "array",
-// 	 	array: result,
-// 	}
-// }
+    if len(result) == 1 {
+        return result[0]
+    }
+    return Value{
+		typ: "array",
+	 	array: result,
+	}
+}
 
-// func llen(args []Value) Value {
-//     if len(args) != 1 {
-//         return Value{typ: "error", str: "ERR wrong number of arguments for 'llen' command"}
-//     }
+func llen(args []Value) Value {
+    if len(args) != 1 {
+        return Value{typ: "error", str: "ERR wrong number of arguments for 'llen' command"}
+    }
 
-//     key := args[0].bulk
+    key := args[0].bulk
 
-//     listStoreMu.Lock()
-//     list, exists := listStore[key]
-//     length := 0
-//     if exists {
-//         length = list.Length()
-//     }
-//     listStoreMu.Unlock()
+    listStoreMu.Lock()
+    list, exists := listStore[key]
+    length := 0
+    if exists {
+        length = list.Length()
+    }
+    listStoreMu.Unlock()
 
-//     return Value{
-// 		typ: "integer",
-// 		num: length,
-// 	}
-// }
+    return Value{
+		typ: "integer",
+		num: length,
+	}
+}
 
 // func lrange(args []Value) Value {
 //     if len(args) != 3 {
