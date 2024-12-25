@@ -19,7 +19,7 @@ var Handlers = map[string]func([]Value) Value{
     "RPUSH":   rpush,
     "RPOP":    rpop,
     "LLEN":    llen,
-    //"LRANGE":  lrange,
+    "LRANGE":  lrange,
     //"BLPOP":   blpop,
 }
 
@@ -334,40 +334,40 @@ func llen(args []Value) Value {
 	}
 }
 
-// func lrange(args []Value) Value {
-//     if len(args) != 3 {
-//         return Value{typ: "error", str: "ERR wrong number of arguments for 'lrange' command"}
-//     }
+func lrange(args []Value) Value {
+    if len(args) != 3 {
+        return Value{typ: "error", str: "ERR wrong number of arguments for 'lrange' command"}
+    }
 
-//     key := args[0].bulk
-//     start, err1 := strconv.Atoi(args[1].bulk)
-//     end, err2 := strconv.Atoi(args[2].bulk)
-//     if err1 != nil || err2 != nil {
-//         return Value{typ: "error", str: "ERR invalid arguments for 'lrange' command"}
-//     }
+    key := args[0].bulk
+    start, err1 := strconv.Atoi(args[1].bulk)
+    end, err2 := strconv.Atoi(args[2].bulk)
+    if err1 != nil || err2 != nil {
+        return Value{typ: "error", str: "ERR invalid arguments for 'lrange' command"}
+    }
 
-//     listStoreMu.Lock()
-//     list, exists := listStore[key]
-//     if !exists {
-//         listStoreMu.Unlock()
-//         return Value{
-// 			typ: "array", 
-// 			array: []Value{},
-// 		}
-//     }
+    listStoreMu.Lock()
+    list, exists := listStore[key]
+    if !exists {
+        listStoreMu.Unlock()
+        return Value{
+			typ: "array", 
+			array: []Value{},
+		}
+    }
 
-//     values := list.ExtractRange(start, end)
-//     result := make([]Value, len(values))
-//     for i, v := range values {
-//         result[i] = Value{typ: "bulk", bulk: fmt.Sprintf("%v", v)}
-//     }
-//     listStoreMu.Unlock()
+    values := list.ExtractRange(start, end)
+    result := make([]Value, len(values))
+    for i, v := range values {
+        result[i] = Value{typ: "bulk", bulk: fmt.Sprintf("%v", v)}
+    }
+    listStoreMu.Unlock()
 
-//     return Value{
-// 		typ: "array",
-// 		array: result,
-// 	}
-// }
+    return Value{
+		typ: "array",
+		array: result,
+	}
+}
 
 // func blpop(args []Value) Value {
 //     if len(args) < 2 {
