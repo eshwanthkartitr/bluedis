@@ -371,6 +371,8 @@ func lrange(args []Value) Value {
 }
 
 func blpop(args []Value) Value {
+    fmt.Println("Received BLPOP command with arguments:", args)
+
     if len(args) < 2 {
         return Value{typ: "error", str: "ERR wrong number of arguments for 'blpop' command"}
     }
@@ -381,13 +383,11 @@ func blpop(args []Value) Value {
         return Value{typ: "error", str: "ERR invalid timeout argument for 'blpop' command"}
     }
 
-    // Add blocking logic for BLPOP here (simplified version provided for now).
-    // Iterates over provided keys to find the first non-empty list.
-    // Create a timer for the timeout.
+    // Create a timer for the timeout
     timer := time.NewTimer(time.Duration(timeout) * time.Second)
     defer timer.Stop()
 
-    // Create a channel to signal when a value is popped.
+    // Create a channel to signal when a value is popped
     popChan := make(chan Value, 1)
 
     go func() {
@@ -398,12 +398,13 @@ func blpop(args []Value) Value {
                 if exists && list.Length() > 0 {
                     value, _ := list.PopLeft()
                     listStoreMu.Unlock()
+                    fmt.Println("Popped value from key:", key.bulk, "value:", value)
                     popChan <- Value{
                         typ: "array",
                         array: []Value{
                             {typ: "bulk", bulk: key.bulk},
                             {typ: "bulk", bulk: fmt.Sprintf("%v", value)},
-                        },             
+                        },
                     }
                     return
                 }
@@ -415,18 +416,19 @@ func blpop(args []Value) Value {
                 popChan <- Value{typ: "null"}
                 return
             default:
-                // Sleep for a short period before retrying.
                 time.Sleep(50 * time.Millisecond)
             }
         }
     }()
 
-    // Simulate blocking logic for `timeout` duration.
-    // Placeholder for actual timeout-based wait mechanism.
+    fmt.Println("Blocking until value is popped or timeout...")
     select {
     case result := <-popChan:
+        fmt.Println("Returning result:", result)
         return result
     case <-timer.C:
+        fmt.Println("Timeout reached, returning null")
         return Value{typ: "null"}
     }
 }
+
