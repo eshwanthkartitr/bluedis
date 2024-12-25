@@ -199,6 +199,7 @@ func lpush(args []Value) Value {
 
 func lpop(args []Value) Value {
     fmt.Println("Received LPOP command with arguments:", args)
+
     if len(args) < 1 || len(args) > 2 {
         return Value{typ: "error", str: "ERR wrong number of arguments for 'lpop' command"}
     }
@@ -217,19 +218,26 @@ func lpop(args []Value) Value {
     list, exists := listStore[key]
     if !exists || list.Length() == 0 {
         listStoreMu.Unlock()
+        fmt.Println("List does not exist or is empty")
         return Value{typ: "null"}
     }
     listStoreMu.Unlock()
 
     list.mu.Lock()
+    defer list.mu.Unlock() // Ensure the mutex is always unlocked
+
     result := make([]Value, 0, count)
     for i := 0; i < count && list.Length() > 0; i++ {
-        value, _ := list.PopLeft()
+        value, ok := list.PopLeft()
+        if !ok {
+            fmt.Println("Failed to pop from list")
+            return Value{typ: "null"}
+        }
         result = append(result, Value{typ: "bulk", bulk: fmt.Sprintf("%v", value)})
     }
-    list.mu.Unlock()
 
-    fmt.Println("List length after LPUSH:", list.Length())
+    fmt.Println("List length after LPOP:", list.Length())
+    fmt.Println("Result to return:", result)
 
     // If only one element is popped, return it as a bulk string wrapped in a Value
     if len(result) == 1 {
@@ -238,6 +246,7 @@ func lpop(args []Value) Value {
     // Otherwise, return an array of bulk strings
     return Value{typ: "array", array: result}
 }
+
 
 
 // func rpush(args []Value) Value {
