@@ -40,7 +40,7 @@ func (dll *DoublyLinkedList) PushLeft(value interface{})int {
 		dll.head = newNode
 	}
 	dll.length++
-	dll.cond.Signal() // Notify any waiting consumers
+	dll.cond.Signal() // Notify any waiting consumers.
 	return dll.length
 }
 
@@ -58,7 +58,7 @@ func (dll *DoublyLinkedList) PushRight(value interface{})int {
 		dll.tail = newNode
 	}
 	dll.length++
-	dll.cond.Signal() // Notify any waiting consumers
+	dll.cond.Signal() // Notify any waiting consumers.
 	return dll.length
 }
 
@@ -106,13 +106,13 @@ func (dll *DoublyLinkedList) Length() int {
 	return dll.length
 }
 
-// BlockingPopLeft removes and returns the value from the head of the list, blocking if empty
+// BlockingPopLeft removes and returns the value from the head of the list, blocking if empty.
 func (dll *DoublyLinkedList) BlockingPopLeft() interface{} {
 	dll.mu.Lock()
 	defer dll.mu.Unlock()
 
 	for dll.head == nil {
-		dll.cond.Wait() // Wait until an item is available
+		dll.cond.Wait() // Wait until an item is available.
 	}
 
 	value := dll.head.value
@@ -127,22 +127,22 @@ func (dll *DoublyLinkedList) BlockingPopLeft() interface{} {
 }
 
 
-// ExtractRange returns a slice of values from the list within the specified range
+// ExtractRange returns a slice of values from the list within the specified range.
 func (dll *DoublyLinkedList) ExtractRange(start, end int) []interface{} {
     dll.mu.Lock()
     defer dll.mu.Unlock()
 
-    // Check if start is out of bounds
+    // Check if start is out of bounds.
     if start < 0 || start >= dll.length {
         return nil
     }
 
-    // If end is -1, set it to the last index ,also adjusts the end if larger than the length of list
+    // If end is -1, set it to the last index ,also adjusts the end if larger than the length of list.
     if end == -1 || end >= dll.length {
         end = dll.length - 1
     }
 
-    // Check if end is less than start after adjustments
+    // Check if end is less than start after adjustments.
     if end < start {
         return nil 
     }
