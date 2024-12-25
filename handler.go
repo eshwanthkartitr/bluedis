@@ -171,6 +171,8 @@ var listStore = make(map[string]*DoublyLinkedList)
 var listStoreMu sync.Mutex
 
 func lpush(args []Value) Value {
+    fmt.Println("Received LPUSH command with arguments:", args)
+    
     if len(args) != 2 {
         return Value{typ: "error", str: "ERR wrong number of arguments for 'lpush' command"}
     }
@@ -180,16 +182,18 @@ func lpush(args []Value) Value {
 
     listStoreMu.Lock()
     list, exists := listStore[key]
-    if !exists {
+    if (!exists) {
         list = NewDoublyLinkedList()
         listStore[key] = list
     }
     listStoreMu.Unlock()
 
-    list.mu.Lock()
+    // list.mu.Lock()
     length := list.PushLeft(value)
-    list.mu.Unlock()
+    // list.mu.Unlock()
 
+    fmt.Println("List length after LPUSH:", length)
+    
     return Value{typ: "integer", num: length}
 }
 
