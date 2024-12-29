@@ -41,6 +41,8 @@ func (v Value) Marshal() []byte {
 		return v.marshalNull()
 	case "error":
 		return v.marshalError()
+	case "integer":
+		return v.marshalInteger()
 	default:
 		return []byte{}
 	}
@@ -91,6 +93,11 @@ func (v Value) marshalError() []byte {
 	bytes = append(bytes, '\r', '\n') // CRLF for RESP
 
 	return bytes
+}
+
+// marshalInteger converts an integer value to a RESP-formatted integer reply.
+func (v Value) marshalInteger() []byte {
+	return []byte(fmt.Sprintf(":%d\r\n", v.num)) // The format is ":<integer>\r\n" as specified by the Redis Serialization Protocol.
 }
 
 type Resp struct {

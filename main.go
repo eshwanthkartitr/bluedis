@@ -28,6 +28,7 @@ func main() {
 	aof.Read(func(value Value) {
 		command := strings.ToUpper(value.array[0].bulk)
 		args := value.array[1:]
+		fmt.Println("Arguments passed :",args)
 
 		handler, ok := Handlers[command]
 		if !ok {
@@ -92,9 +93,10 @@ func main() {
 			}
 
 			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" {
+			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP" {
 				aof.Write(value)
 			}
+			
 
 			result := handler(args)
 			err = writer.Write(result)
