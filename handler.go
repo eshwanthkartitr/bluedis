@@ -1,4 +1,3 @@
-// handler.go
 package main
 
 import (
@@ -17,6 +16,13 @@ var Handlers = map[string]func([]Value) Value{
 	"HSET":    hset,
 	"HGET":    hget,
 	"HGETALL": hgetall,
+  "LPUSH":   lpush,
+	"LPOP":    lpop,
+	"RPUSH":   rpush,
+	"RPOP":    rpop,
+	"LLEN":    llen,
+	"LRANGE":  lrange,
+	"BLPOP":   blpop,
 	"EXPIRE":  expireHandler,
 	"DEL":     Delete,
 }
@@ -289,5 +295,262 @@ func hgetall(args []Value) Value {
 	return Value{
 		typ:   "array",
 		array: resp,
+	}
+}
+
+// Define listStore as a map where the keys are strings and the values are pointers to DoublyLinkedList.
+var listStore = make(map[string]*DoublyLinkedList)
+var listStoreMu sync.Mutex
+
+func lpush(args []Value) Value {
+	// fmt.Println("Received LPUSH command with arguments:", args)
+
+	if len(args) != 2 {
+		return Value{typ: "error", str: "ERR wrong number of arguments for 'lpush' command"}
+	}
+
+	key := args[0].bulk
+	value := args[1].bulk
+
+	listStoreMu.Lock()
+	list, exists := listStore[key]
+	if !exists {
+		list = NewDoublyLinkedList()
+		listStore[key] = list
+	}
+	listStoreMu.Unlock()
+
+	length := list.PushLeft(value)
+
+	// fmt.Println("List length after LPUSH:", length)
+
+	return Value{typ: "integer", num: length}
+}
+
+func lpop(args []Value) Value {
+	// fmt.Println("Received LPOP command with arguments:", args)
+
+	if len(args) < 1 || len(args) > 2 {
+		return Value{typ: "error", str: "ERR wrong number of arguments for 'lpop' command"}
+	}
+
+	key := args[0].bulk
+	count := 1 // Default to popping one element
+	if len(args) == 2 {
+		var err error
+		count, err = strconv.Atoi(args[1].bulk)
+		if err != nil || count <= 0 {
+			return Value{typ: "error", str: "ERR invalid count argument for 'lpop' command"}
+		}
+	}
+
+	listStoreMu.Lock()
+	list, exists := listStore[key]
+	if !exists || list.Length() == 0 {
+		listStoreMu.Unlock()
+		fmt.Println("List does not exist or is empty")
+		return Value{typ: "null"}
+	}
+	listStoreMu.Unlock()
+
+	result := make([]Value, 0, count)
+	for i := 0; i < count && list.Length() > 0; i++ {
+		value, ok := list.PopLeft()
+		if !ok {
+			fmt.Println("Failed to pop from list")
+			return Value{typ: "null"}
+		}
+		result = append(result, Value{typ: "bulk", bulk: fmt.Sprintf("%v", value)})
+	}
+
+	// fmt.Println("List length after LPOP:", list.Length())
+	// fmt.Println("Result to return:", result)
+
+	// If only one element is popped, return it as a bulk string wrapped in a Value.
+	if len(result) == 1 {
+		return Value{typ: "bulk", bulk: result[0].bulk}
+	}
+	// Otherwise, return an array of bulk strings.
+	return Value{typ: "array", array: result}
+}
+
+func rpush(args []Value) Value {
+	if len(args) < 2 {
+		return Value{typ: "error", str: "ERR wrong number of arguments for 'rpush' command"}
+	}
+
+	key := args[0].bulk
+	elements := args[1:]
+
+	listStoreMu.Lock()
+	list, exists := listStore[key]
+	if !exists {
+		list = NewDoublyLinkedList()
+		listStore[key] = list
+	}
+	for _, element := range elements {
+		list.PushRight(element.bulk)
+	}
+	length := list.Length()
+	listStoreMu.Unlock()
+
+	return Value{
+		typ: "integer",
+		num: length,
+	}
+}
+
+func rpop(args []Value) Value {
+	if len(args) < 1 || len(args) > 2 {
+		return Value{typ: "error", str: "ERR wrong number of arguments for 'rpop' command"}
+	}
+
+	key := args[0].bulk
+	count := 1
+	if len(args) == 2 {
+		var err error
+		count, err = strconv.Atoi(args[1].bulk)
+		if err != nil || count <= 0 {
+			return Value{typ: "error", str: "ERR invalid count argument for 'rpop' command"}
+		}
+	}
+
+	listStoreMu.Lock()
+	list, exists := listStore[key]
+	if !exists || list.Length() == 0 {
+		listStoreMu.Unlock()
+		return Value{typ: "null"}
+	}
+
+	result := make([]Value, 0, count)
+	for i := 0; i < count && list.Length() > 0; i++ {
+		value, _ := list.PopRight()
+		result = append(result, Value{typ: "bulk", bulk: fmt.Sprintf("%v", value)})
+	}
+	listStoreMu.Unlock()
+
+	if len(result) == 1 {
+		return result[0]
+	}
+	return Value{
+		typ:   "array",
+		array: result,
+	}
+}
+
+func llen(args []Value) Value {
+	if len(args) != 1 {
+		return Value{typ: "error", str: "ERR wrong number of arguments for 'llen' command"}
+	}
+
+	key := args[0].bulk
+
+	listStoreMu.Lock()
+	list, exists := listStore[key]
+	length := 0
+	if exists {
+		length = list.Length()
+	}
+	listStoreMu.Unlock()
+
+	return Value{
+		typ: "integer",
+		num: length,
+	}
+}
+
+func lrange(args []Value) Value {
+	if len(args) != 3 {
+		return Value{typ: "error", str: "ERR wrong number of arguments for 'lrange' command"}
+	}
+
+	key := args[0].bulk
+	start, err1 := strconv.Atoi(args[1].bulk)
+	end, err2 := strconv.Atoi(args[2].bulk)
+	if err1 != nil || err2 != nil {
+		return Value{typ: "error", str: "ERR invalid arguments for 'lrange' command"}
+	}
+
+	listStoreMu.Lock()
+	list, exists := listStore[key]
+	if !exists {
+		listStoreMu.Unlock()
+		return Value{
+			typ:   "array",
+			array: []Value{},
+		}
+	}
+
+	values := list.ExtractRange(start, end)
+	result := make([]Value, len(values))
+	for i, v := range values {
+		result[i] = Value{typ: "bulk", bulk: fmt.Sprintf("%v", v)}
+	}
+	listStoreMu.Unlock()
+
+	return Value{
+		typ:   "array",
+		array: result,
+	}
+}
+
+func blpop(args []Value) Value {
+	if len(args) < 2 {
+		return Value{typ: "error", str: "ERR wrong number of arguments for 'blpop' command"}
+	}
+
+	// Extract keys and timeout.
+	keys := args[:len(args)-1]
+	timeout, err := strconv.Atoi(args[len(args)-1].bulk)
+	if err != nil || timeout < 0 {
+		return Value{typ: "error", str: "ERR invalid timeout argument for 'blpop' command"}
+	}
+
+	// Create a ticker for polling and a timer for timeout.
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	var timer *time.Timer
+	var timerC <-chan time.Time
+
+	if timeout > 0 {
+		timer = time.NewTimer(time.Duration(timeout) * time.Second)
+		defer timer.Stop()
+		timerC = timer.C
+	}
+
+	// Main loop
+	for {
+		// Check all keys under lock.
+		listStoreMu.Lock()
+		for _, key := range keys {
+			list, exists := listStore[key.bulk]
+			if exists && list.Length() > 0 {
+				value, _ := list.PopLeft()
+				listStoreMu.Unlock()
+
+				return Value{
+					typ: "array",
+					array: []Value{
+						{typ: "bulk", bulk: key.bulk},
+						{typ: "bulk", bulk: fmt.Sprintf("%v", value)},
+					},
+				}
+			}
+		}
+		listStoreMu.Unlock()
+
+		// Wait for either timeout or next tick.
+		select {
+		case <-timerC:
+			return Value{typ: "null"}
+		case <-ticker.C:
+			// Continue to next iteration.
+		}
+
+		// If timeout is 0, return immediately.
+		if timeout == 0 {
+			return Value{typ: "null"}
+		}
 	}
 }
