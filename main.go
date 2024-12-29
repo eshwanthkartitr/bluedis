@@ -5,7 +5,10 @@ import (
 	"io"
 	"net"
 	"strings"
+	"time"
+	"strconv"
 )
+
 
 func main() {
 
@@ -26,16 +29,70 @@ func main() {
 
 	// Persistance added and database automatically reconstructs from AOF
 	aof.Read(func(value Value) {
-		command := strings.ToUpper(value.array[0].bulk)
-		args := value.array[1:]
-		fmt.Println("Arguments passed :",args)
-
-		handler, ok := Handlers[command]
-		if !ok {
-			fmt.Println("Invalid command: ", command)
-			return
+		if value.typ == "array" && len(value.array) > 0 {
+			command := strings.ToUpper(value.array[0].bulk)
+			args := value.array[1:]
+    }
+    else {
+      command := strings.ToUpper(value.array[0].bulk)
+		  args := value.array[1:]
+		  fmt.Println("Arguments passed :",args)
+    }
+			switch command {
+			case "SET":
+				if len(args) >= 2 {
+					key := args[0].bulk
+					val := args[1].bulk
+					SETsMu.Lock()
+					currentVal := Values{Content : val, HasExpiry: false,}
+					SETs[key] = currentVal
+					SETsMu.Unlock()
+					// Handle EX/PX during reconstruction
+					for i := 2; i < len(args); i += 2 {
+						if i+1 < len(args) {
+							switch strings.ToUpper(args[i].bulk) {
+							case "EX":
+								seconds, _ := strconv.Atoi(args[i+1].bulk)
+								SETsMu.Lock()
+								currentVal := SETs[key]
+								currentVal.Begone = time.Now().Add(time.Duration(seconds) * time.Second)
+								currentVal.HasExpiry= true
+								SETs[key] = currentVal
+								SETsMu.Unlock()
+							case "PX":
+								milliseconds, _ := strconv.ParseInt(args[i+1].bulk, 10, 64)
+								SETsMu.Lock()
+								currentVal := SETs[key]
+								currentVal.Begone = time.Now().Add(time.Duration(milliseconds) * time.Millisecond)
+								currentVal.HasExpiry= true
+								SETs[key] = currentVal
+								SETsMu.Unlock()
+							}
+						}
+					}
+				}
+			case "EXPIRE":
+				if len(args) >= 2 {
+					key := args[0].bulk
+					seconds, _ := strconv.Atoi(args[1].bulk)
+					expiryTime := time.Now().Add(time.Duration(seconds) * time.Second)
+					SETsMu.Lock()
+					fmt.Println("EXPIRE: key=", key, "expiryTime=", expiryTime, "SETs[key]=", SETs[key])
+					if val, ok := SETs[key]; ok {
+						val.HasExpiry = true
+						val.Begone = expiryTime
+						SETs[key] = val
+					}
+					SETsMu.Unlock()
+				}
+			case "DEL":
+				for _, arg := range args {
+					SETsMu.Lock()
+					delete(SETs, arg.bulk)
+					SETsMu.Unlock()
+				}
+			}
 		}
-		handler(args)
 	})
 
 	// When a connection drops, we continue listening for a new connection
@@ -89,6 +146,38 @@ func main() {
 			if !ok {
 				fmt.Println("Invalid command: ", command)
 				writer.Write(Value{typ: "string", str: ""})
+				
+				continue
+			}
+
+			if command  == "EXPIRE" {
+				// Expire command
+				result := expireHandler(args)
+				fmt.Println(args)
+				if result.typ == "integer" && result.num == 1 {
+					num,err := strconv.Atoi(args[1].bulk)
+					aof.WriteExpire(args[0].bulk,num,args[2].bulk) // Write EXPIRE to AOF if successful
+					if err != nil {
+						fmt.Println(err)
+					}
+				}
+				writer.Write(result)
+				continue
+
+				// expire(args)
+				continue
+			}
+
+			if command == "DEL"{
+				result := Delete(args)
+				if result.typ == "integer" && result.num > 0 {
+					keys := make([]string, len(args))
+					for i, arg := range args {
+						keys[i] = arg.bulk
+					}
+					aof.WriteDel(keys) // DEL to AOF if successful
+				}
+				writer.Write(result)
 				continue
 			}
 

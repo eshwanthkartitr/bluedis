@@ -170,6 +170,12 @@ func (r *Resp) Read() (Value, error) {
 		return r.readArray()
 	case BULK:
 		return r.readBulk()
+	case STRING:
+		return r.readString()
+	case INTEGER:
+		return r.readIntegerVal()
+	case ERROR:
+		return r.readError()
 	default:
 		fmt.Printf("Unknown type: %v", string(_type))
 		return Value{}, nil
@@ -222,8 +228,16 @@ func (r *Resp) readBulk() (v Value, err error) {
 		return v, err
 	}
 
+	if length == -1 {
+		v.typ = "null"
+		return v, nil
+	}
+
 	bulk := make([]byte, length)
-	r.reader.Read(bulk)
+	_, err = io.ReadFull(r.reader, bulk)
+	if err != nil {
+		return v, err
+	}
 	v.bulk = string(bulk)
 
 	// Read the trailing CRLF so that the pointer is effectively moved to the
@@ -231,6 +245,36 @@ func (r *Resp) readBulk() (v Value, err error) {
 	// and Read method would not work properly
 	r.readLine()
 
+	return v, nil
+}
+
+func (r *Resp) readString() (v Value, err error) {
+	v.typ = "string"
+	line, _, err := r.readLine()
+	if err != nil {
+		return v, err
+	}
+	v.str = string(line)
+	return v, nil
+}
+
+func (r *Resp) readIntegerVal() (v Value, err error) {
+	v.typ = "integer"
+	num, _, err := r.readInteger()
+	if err != nil {
+		return v, err
+	}
+	v.num = num
+	return v, nil
+}
+
+func (r *Resp) readError() (v Value, err error) {
+	v.typ = "error"
+	line, _, err := r.readLine()
+	if err != nil {
+		return v, err
+	}
+	v.str = string(line)
 	return v, nil
 }
 
@@ -244,16 +288,10 @@ func NewWriter(w io.Writer) *Writer {
 	}
 }
 
-func (w *Writer) Write(v Value) error {
-
+func (w *Writer) Write(value Value) error {
 	// Get all the required bytes after marshalling and write everything to the
 	// io.Writer provided in the function. Could be a file or a stdout
-	var bytes = v.Marshal()
-
-	_, err := w.writer.Write(bytes)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	respData := value.Marshal()
+	_, err := w.writer.Write(respData)
+	return err
 }
