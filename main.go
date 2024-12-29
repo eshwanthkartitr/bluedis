@@ -32,12 +32,7 @@ func main() {
 		if value.typ == "array" && len(value.array) > 0 {
 			command := strings.ToUpper(value.array[0].bulk)
 			args := value.array[1:]
-    }
-    else {
-      command := strings.ToUpper(value.array[0].bulk)
-		  args := value.array[1:]
-		  fmt.Println("Arguments passed :",args)
-    }
+
 			switch command {
 			case "SET":
 				if len(args) >= 2 {
@@ -182,10 +177,9 @@ func main() {
 			}
 
 			// Append "write" commands to AOF
-			if command == "SET" || command == "HSET" || command == "LPUSH" || command == "RPUSH" || command == "LPOP" || command == "RPOP" || command == "BLPOP" {
+			if command == "SET" || command == "HSET" {
 				aof.Write(value)
 			}
-			
 
 			result := handler(args)
 			err = writer.Write(result)
